@@ -1,0 +1,421 @@
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase, Profile } from '../utils/supabase';
+
+type AuthContextType = {
+  user: User | null;
+  profile: Profile | null;
+  session: Session | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, role: 'teacher' | 'student') => Promise<{ error: any }>;
+  signOut: () => Promise<boolean>;
+  updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
+  createStudent: (email: string, password: string, fullName: string) => Promise<{ error: any, user?: User | null }>;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check active sessions and sets the user
+    let sessionTimeout: NodeJS.Timeout;
+    
+    const getSession = async () => {
+      try {
+        setLoading(true);
+        console.log("Getting session...");
+        
+        // Set a timeout to prevent getting stuck in loading state
+        sessionTimeout = setTimeout(() => {
+          console.error("Session retrieval timed out");
+          setLoading(false);
+          setAuthError("Authentication timed out. Please try refreshing the page.");
+        }, 5000);
+        
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        // Clear the timeout since we got a response
+        clearTimeout(sessionTimeout);
+        
+        if (sessionError) {
+          console.error("Session error:", sessionError);
+          setAuthError(sessionError.message);
+          setLoading(false);
+          return;
+        }
+        
+        console.log("Session retrieved:", session ? "Found" : "Not found");
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          console.log("User authenticated, getting profile...");
+          await getProfile(session.user.id);
+        } else {
+          console.log("No authenticated user found");
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error("Error in getSession:", error);
+        setAuthError("An error occurred during authentication");
+      } finally {
+        clearTimeout(sessionTimeout);
+        setLoading(false);
+      }
+    };
+
+    getSession();
+
+    // Listen for changes on auth state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        console.log("Auth state changed:", _event);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          console.log("User authenticated after state change, getting profile...");
+          await getProfile(session.user.id);
+        } else {
+          console.log("No authenticated user after state change");
+          setProfile(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      clearTimeout(sessionTimeout);
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const getProfile = async (userId: string) => {
+    try {
+      console.log("Fetching profile for user:", userId);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        setProfile(null);
+        return { error };
+      }
+
+      console.log("Profile retrieved:", data);
+      setProfile(data as Profile);
+      return { data };
+    } catch (error) {
+      console.error("Unexpected error in getProfile:", error);
+      setProfile(null);
+      return { error };
+    }
+  };
+
+  // Sign in with email and password
+  const signIn = async (email: string, password: string) => {
+    try {
+      console.log("Signing in user:", email);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        console.error("Sign in error:", error);
+        return { error };
+      }
+      
+      console.log("Sign in successful:", data.user?.id);
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in signIn:", error);
+      return { error };
+    }
+  };
+
+  // Ensure profile exists using our backup function
+  const ensureProfileExists = async (userId: string, role: string, fullName: string, email: string) => {
+    try {
+      console.log("Calling ensure_profile_exists function for user:", userId);
+      const { error } = await supabase.rpc('ensure_profile_exists', {
+        user_id: userId,
+        user_role: role,
+        user_name: fullName,
+        user_email: email
+      });
+      
+      if (error) {
+        console.error("Error in ensure_profile_exists:", error);
+        return { error };
+      }
+      
+      console.log("ensure_profile_exists completed successfully");
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in ensureProfileExists:", error);
+      return { error };
+    }
+  };
+
+  // Sign up with email and password
+  const signUp = async (email: string, password: string, fullName: string, role: 'teacher' | 'student') => {
+    try {
+      // Only allow teacher registration through this method
+      if (role !== 'teacher') {
+        console.error("Only teachers can register directly");
+        return { error: new Error('Only teachers can register directly. Students must be created by teachers.') };
+      }
+
+      console.log("Signing up user:", email, "as", role);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role,
+          },
+        },
+      });
+
+      if (error) {
+        console.error("Sign up error:", error);
+        return { error };
+      }
+
+      console.log("Sign up successful:", data.user?.id);
+      
+      // The user should now be signed in automatically after signup
+      if (data.user) {
+        try {
+          console.log("Attempting to create profile after signup");
+          
+          // Wait a moment to ensure auth state is updated
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Get a fresh session to ensure we have up-to-date tokens
+          const { data: sessionData } = await supabase.auth.getSession();
+          
+          if (sessionData.session) {
+            console.log("Got fresh session, creating profile");
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .upsert({
+                id: data.user.id,
+                role: role,
+                full_name: fullName,
+                email: email,
+                created_at: new Date(),
+                updated_at: new Date()
+              });
+              
+            if (profileError) {
+              console.error("Error creating profile:", profileError);
+              // Try the backup method with our function
+              await ensureProfileExists(data.user.id, role, fullName, email);
+            } else {
+              console.log("Profile created successfully");
+            }
+          } else {
+            console.log("No session available after signup, profile will be created by trigger");
+          }
+        } catch (profileError) {
+          console.error("Unexpected error creating profile:", profileError);
+          // Continue with signup, as the user was created successfully
+        }
+      }
+      
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in signUp:", error);
+      return { error };
+    }
+  };
+
+  // Create student account by teacher
+  const createStudent = async (email: string, password: string, fullName: string) => {
+    if (!user) {
+      console.error("Cannot create student: No authenticated user");
+      return { error: new Error('You must be logged in as a teacher to create a student') };
+    }
+
+    if (profile?.role !== 'teacher') {
+      console.error("Cannot create student: User is not a teacher");
+      return { error: new Error('Only teachers can create student accounts') };
+    }
+
+    try {
+      console.log("Creating student account for:", email);
+      
+      // Create the auth user with standard signUp instead of admin.createUser
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: 'student',
+          },
+        },
+      });
+
+      if (error) {
+        console.error("Student creation error:", error);
+        return { error };
+      }
+
+      console.log("Student signup successful:", data.user?.id);
+      
+      // Manually create the profile for the student
+      if (data.user) {
+        try {
+          console.log("Creating profile for new student");
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: data.user.id,
+              role: 'student',
+              full_name: fullName,
+              email: email,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+            
+          if (profileError) {
+            console.error("Error creating student profile:", profileError);
+            // Try the backup function
+            await ensureProfileExists(data.user.id, 'student', fullName, email);
+          } else {
+            console.log("Student profile created successfully");
+          }
+        } catch (profileError) {
+          console.error("Unexpected error creating student profile:", profileError);
+          // Continue with student creation process
+        }
+        
+        try {
+          // Link student to teacher
+          const { error: linkError } = await linkStudentToTeacher(data.user.id);
+          if (linkError) {
+            console.error("Error linking student to teacher:", linkError);
+            // Continue anyway, we'll still return success
+          }
+        } catch (linkError) {
+          console.error("Unexpected error linking student:", linkError);
+        }
+      }
+      
+      return { error: null, user: data.user };
+    } catch (error) {
+      console.error("Unexpected error in createStudent:", error);
+      return { error };
+    }
+  };
+
+  // Link student to teacher
+  const linkStudentToTeacher = async (studentId: string) => {
+    if (!user) return { error: new Error('Teacher not authenticated') };
+    
+    try {
+      const { error } = await supabase
+        .from('student_teacher')
+        .insert({
+          student_id: studentId,
+          teacher_id: user.id,
+        });
+        
+      if (error) {
+        console.error("Error linking student to teacher:", error);
+        return { error };
+      }
+      
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in linkStudentToTeacher:", error);
+      return { error };
+    }
+  };
+
+  // Sign out
+  const signOut = async () => {
+    try {
+      console.log("Signing out user");
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error("Error signing out:", error);
+        return false;
+      }
+      
+      // Manually clear state
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      
+      console.log("User signed out successfully");
+      return true;
+    } catch (error) {
+      console.error("Unexpected error in signOut:", error);
+      return false;
+    }
+  };
+
+  // Update user profile
+  const updateProfile = async (updates: Partial<Profile>) => {
+    if (!user) {
+      console.error("Cannot update profile: No authenticated user");
+      return { error: new Error('User not authenticated') };
+    }
+
+    try {
+      console.log("Updating profile for user:", user.id);
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+
+      if (error) {
+        console.error("Error updating profile:", error);
+        return { error };
+      }
+
+      console.log("Profile updated successfully");
+      // Refresh profile
+      await getProfile(user.id);
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in updateProfile:", error);
+      return { error };
+    }
+  };
+
+  const value = {
+    user,
+    profile,
+    session,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    updateProfile,
+    createStudent,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+} 
