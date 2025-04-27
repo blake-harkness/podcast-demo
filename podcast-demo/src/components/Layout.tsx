@@ -19,7 +19,10 @@ export function Layout({ children }: LayoutProps) {
     <div className="app-container">
       <header>
         <div className="header-content">
-          <h1>Podcast Course Platform</h1>
+          <div className="header-brand">
+            <img src="/digikor_logo.png" alt="DigiKōr Logo" className="header-logo" />
+            <h1>DigiKōr - Digital Kōrero</h1>
+          </div>
           {user ? (
             <nav>
               <ul>
@@ -63,7 +66,7 @@ export function Layout({ children }: LayoutProps) {
       </header>
       <main>{children}</main>
       <footer>
-        <p>&copy; {new Date().getFullYear()} Podcast Course Platform</p>
+        <p>&copy; {new Date().getFullYear()} DigiKōr - Digital Kōrero</p>
       </footer>
     </div>
   );

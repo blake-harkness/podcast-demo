@@ -12,6 +12,7 @@ type AuthContextType = {
   signOut: () => Promise<boolean>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
   createStudent: (email: string, password: string, fullName: string) => Promise<{ error: any, user?: User | null }>;
+  getProfile: (userId: string) => Promise<{ data?: Profile | null, error?: any }>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,13 +33,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(true);
         console.log("Getting session...");
         
-        // Set a timeout to prevent getting stuck in loading state
+        // Set a longer timeout for session retrieval
         sessionTimeout = setTimeout(() => {
           console.error("Session retrieval timed out");
           setLoading(false);
           setAuthError("Authentication timed out. Please try refreshing the page.");
-        }, 5000);
+        }, 10000);
         
+        // Get the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         // Clear the timeout since we got a response
@@ -52,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         console.log("Session retrieved:", session ? "Found" : "Not found");
+        
+        // Update state with session data
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -73,10 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getSession();
 
-    // Listen for changes on auth state
+    // Set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        console.log("Auth state changed:", _event);
+      async (event, session) => {
+        console.log("Auth state changed:", event);
+        
+        // Update the session and user state
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -87,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("No authenticated user after state change");
           setProfile(null);
         }
+        
         setLoading(false);
       }
     );
@@ -407,6 +414,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
     updateProfile,
     createStudent,
+    getProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

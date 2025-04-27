@@ -9,7 +9,7 @@ type ProtectedRouteProps = {
 };
 
 export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, getProfile } = useAuth();
   const [waitTime, setWaitTime] = useState(0);
   const [retryingProfile, setRetryingProfile] = useState(false);
   const [hasRefreshed, setHasRefreshed] = useState(false);
@@ -39,8 +39,8 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
       timer = window.setTimeout(() => {
         setWaitTime(prev => prev + 1);
         
-        // After 3 seconds without a profile, try to fetch it manually
-        if (user && !profile && waitTime >= 3 && !retryingProfile) {
+        // After 2 seconds without a profile, try to fetch it manually
+        if (user && !profile && waitTime >= 2 && !retryingProfile) {
           attemptProfileRetrieval();
         }
       }, 1000);
@@ -59,11 +59,53 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
       console.log("Manually attempting to retrieve profile");
       setRetryingProfile(true);
       
-      // Create the profile if it doesn't exist
+      // First try direct profile fetch
+      if (getProfile) {
+        console.log("Using context getProfile function");
+        const result = await getProfile(user.id);
+        if (result.data && !result.error) {
+          console.log("Profile retrieved successfully via context");
+          return;
+        }
+      }
+      
+      // Then try direct query
+      const { data: directProfile, error: directError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+        
+      if (directProfile && !directError) {
+        console.log("Profile retrieved via direct query, reloading page");
+        window.location.reload();
+        return;
+      }
+      
+      // If that fails, create the profile
+      console.log("Attempting to create profile");
+      const { error: upsertError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          role: 'student',
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+          email: user.email || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        
+      if (upsertError) {
+        console.error("Error upserting profile:", upsertError);
+      } else {
+        console.log("Profile created successfully");
+      }
+      
+      // Fallback to RPC function
       await supabase.rpc('ensure_profile_exists', {
         user_id: user.id,
-        user_role: 'teacher', // Default to teacher if unknown
-        user_name: user.email?.split('@')[0] || 'User',
+        user_role: user.user_metadata?.role || 'student',
+        user_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         user_email: user.email || ''
       });
       
@@ -112,7 +154,7 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
 
   // If we have a user but no profile, it might still be loading or there's an issue
   if (!profile) {
-    const message = waitTime >= 4 
+    const message = waitTime >= 3 
       ? "We're having trouble loading your profile. Please try refreshing the page."
       : "Loading your profile...";
       
@@ -122,7 +164,7 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
       <div className="loading-container">
         <p>{message}</p>
         <p className="loading-details">
-          {waitTime >= 3 && !retryingProfile && (
+          {waitTime >= 2 && !retryingProfile && (
             <button 
               onClick={attemptProfileRetrieval} 
               className="btn-primary"

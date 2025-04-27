@@ -170,23 +170,25 @@ export function TeacherDashboard() {
     <div className="dashboard-container">
       <div className="dashboard-header">
         <h1>Teacher Dashboard</h1>
-        <button 
-          className="btn-link" 
-          onClick={handleSignOut}
-        >
-          Sign Out
-        </button>
-        <div className="dashboard-actions">
+        <div className="dashboard-controls">
           <button 
-            onClick={handleRefresh} 
-            className="btn-secondary"
-            disabled={refreshing}
+            className="btn-signout" 
+            onClick={handleSignOut}
           >
-            {refreshing ? 'Refreshing...' : 'Refresh Data'}
+            Sign Out
           </button>
-          <Link to="/create-student" className="btn-primary">
-            Add New Student
-          </Link>
+          <div className="dashboard-actions">
+            <button 
+              onClick={handleRefresh} 
+              className="btn-refresh"
+              disabled={refreshing}
+            >
+              {refreshing ? 'Refreshing...' : 'Refresh Data'}
+            </button>
+            <Link to="/create-student" className="btn-add-student">
+              Add New Student
+            </Link>
+          </div>
         </div>
       </div>
       
@@ -195,7 +197,7 @@ export function TeacherDashboard() {
       {students.length === 0 ? (
         <div className="empty-state">
           <p>You don't have any students yet.</p>
-          <Link to="/students" className="btn-primary mt-4">
+          <Link to="/students" className="btn-manage-students">
             Manage Students
           </Link>
         </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, CourseModule, Course } from '../utils/supabase';
+import { useNavigate } from 'react-router-dom';
 
 type ModuleWithProgress = CourseModule & {
   completed: boolean;
@@ -10,6 +11,7 @@ type ModuleWithProgress = CourseModule & {
 
 export function StudentCourse() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
@@ -143,8 +145,12 @@ export function StudentCourse() {
     }
   }
 
+  function handleGoToLesson(weekNumber: number) {
+    navigate(`/course/lesson${weekNumber}`);
+  }
+
   if (loading) {
-    return <div>Loading...</div>;
+    return <div className="loading-container">Loading course content...</div>;
   }
 
   if (error) {
@@ -155,12 +161,12 @@ export function StudentCourse() {
 
   return (
     <div className="course-container">
-      <h2>{course?.title}</h2>
+      <h1 className="course-title">{course?.title}</h1>
       <p className="course-description">{course?.description}</p>
 
       <div className="course-layout">
         <div className="module-sidebar">
-          <h3>Course Modules</h3>
+          <h2>Course Modules</h2>
           <div className="module-list">
             {modules.map((module) => (
               <div
@@ -182,42 +188,35 @@ export function StudentCourse() {
           {activeModuleData ? (
             <>
               <div className="module-header">
-                <h3>
+                <h2>
                   Week {activeModuleData.week_number}: {activeModuleData.title}
-                </h3>
-                <button
-                  className={`btn-toggle ${
-                    activeModuleData.completed ? 'completed' : ''
-                  }`}
-                  onClick={() =>
-                    handleToggleComplete(
-                      activeModuleData.id,
-                      !activeModuleData.completed
-                    )
-                  }
-                >
-                  {activeModuleData.completed
-                    ? 'Mark as Incomplete'
-                    : 'Mark as Complete'}
-                </button>
-              </div>
-              <div className="module-status">
-                Status:{' '}
-                <span
-                  className={`status-indicator ${
-                    activeModuleData.completed ? 'completed' : 'incomplete'
-                  }`}
-                >
-                  {activeModuleData.completed ? 'Completed' : 'Incomplete'}
-                </span>
-                {activeModuleData.completed && activeModuleData.completed_at && (
-                  <span className="completed-date">
-                    on{' '}
-                    {new Date(activeModuleData.completed_at).toLocaleDateString()}
+                </h2>
+                <div className="module-status">
+                  Status:{' '}
+                  <span
+                    className={`status-indicator ${
+                      activeModuleData.completed ? 'completed' : 'incomplete'
+                    }`}
+                  >
+                    {activeModuleData.completed ? 'Completed' : 'Incomplete'}
                   </span>
-                )}
+                  {activeModuleData.completed && activeModuleData.completed_at && (
+                    <span className="completed-date">
+                      on{' '}
+                      {new Date(activeModuleData.completed_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <div className="module-actions">
+                  <button
+                    className="btn-primary"
+                    onClick={() => handleGoToLesson(activeModuleData.week_number)}
+                  >
+                    Go to Lesson
+                  </button>
+                </div>
               </div>
-              <div className="module-text">{activeModuleData.content}</div>
+              <div className="module-description">{activeModuleData.content}</div>
             </>
           ) : (
             <div className="no-module-selected">

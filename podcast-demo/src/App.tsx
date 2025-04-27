@@ -10,6 +10,15 @@ import { TeacherDashboard } from './pages/TeacherDashboard';
 import { Students } from './pages/Students';
 import { StudentCourse } from './pages/StudentCourse';
 import { CreateStudent } from './pages/CreateStudent';
+import Lesson1 from './pages/lessons/Lesson1';
+import Lesson2 from './pages/lessons/Lesson2';
+import Lesson3 from './pages/lessons/Lesson3';
+import Lesson4 from './pages/lessons/Lesson4';
+import Lesson5 from './pages/lessons/Lesson5';
+import Lesson6 from './pages/lessons/Lesson6';
+import Lesson7 from './pages/lessons/Lesson7';
+import Lesson8 from './pages/lessons/Lesson8';
+import Lesson9 from './pages/lessons/Lesson9';
 import './App.css';
 
 function App() {
@@ -65,6 +74,80 @@ function App() {
               element={
                 <ProtectedRoute allowedRole="student">
                   <StudentCourse />
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Lesson routes with updated paths */}
+            <Route
+              path="/course/lesson1"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson1 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson2"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson2 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson3"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson3 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson4"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson4 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson5"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson5 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson6"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson6 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson7"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson7 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson8"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson8 />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/course/lesson9"
+              element={
+                <ProtectedRoute allowedRole="student">
+                  <Lesson9 />
                 </ProtectedRoute>
               }
             />

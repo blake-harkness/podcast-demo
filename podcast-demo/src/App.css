@@ -1,7 +1,7 @@
 #root {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0;
   text-align: center;
 }
 
@@ -69,6 +69,10 @@ body {
   line-height: 1.6;
   color: var(--dark-gray);
   background-color: var(--light-gray);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 /* App Container */
@@ -76,6 +80,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  width: 100%;
 }
 
 /* Header */
@@ -84,13 +89,15 @@ header {
   color: var(--white);
   padding: 1rem 2rem;
   box-shadow: var(--box-shadow);
+  width: 100%;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 1200px;
+  width: 100%;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -129,7 +136,7 @@ nav a:hover, .btn-link:hover {
 main {
   flex: 1;
   padding: 2rem;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
@@ -141,6 +148,7 @@ footer {
   text-align: center;
   padding: 1rem;
   margin-top: auto;
+  width: 100%;
 }
 
 /* Auth Pages */
@@ -633,4 +641,281 @@ footer {
 .btn-secondary:disabled {
   background-color: #a6acb1;
   cursor: not-allowed;
+}
+
+/* Lesson pages */
+.lesson-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: left;
+}
+
+.lesson-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e1e1e1;
+}
+
+.lesson-header h1 {
+  font-size: 2rem;
+  color: var(--primary-color);
+  margin: 0;
+}
+
+.completion-status {
+  font-size: 1rem;
+}
+
+.status {
+  font-weight: bold;
+  padding: 0.3rem 0.6rem;
+  border-radius: 3px;
+}
+
+.status.completed {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: var(--success-color);
+}
+
+.status.incomplete {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: var(--warning-color);
+}
+
+.lesson-content {
+  margin-bottom: 2rem;
+  line-height: 1.8;
+  font-size: 1.1rem;
+}
+
+.lesson-content h2 {
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+}
+
+.lesson-content h3 {
+  color: var(--primary-dark);
+  margin: 1.5rem 0 1rem 0;
+}
+
+.lesson-content p {
+  margin-bottom: 1rem;
+}
+
+.lesson-content ul, .lesson-content ol {
+  margin-bottom: 1rem;
+  margin-left: 2rem;
+}
+
+.lesson-content li {
+  margin-bottom: 0.5rem;
+}
+
+.lesson-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e1e1e1;
+}
+
+.btn-complete {
+  background-color: var(--success-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-incomplete {
+  background-color: var(--warning-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-back {
+  background-color: var(--gray);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-lesson {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.6rem 1.2rem;
+  margin-right: 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.module-actions {
+  display: flex;
+  align-items: center;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+  font-size: 1.2rem;
+  color: var(--gray);
+}
+
+/* Dashboard Controls & Buttons */
+.dashboard-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-signout {
+  color: var(--white);
+  background: none;
+  border: 1px solid var(--white);
+  border-radius: var(--border-radius);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-signout:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-refresh {
+  background-color: var(--gray);
+  color: var(--white);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-refresh:hover {
+  background-color: var(--dark-gray);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-add-student, .btn-manage-students {
+  display: inline-block;
+  background-color: var(--primary-color);
+  color: var(--white);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.3s;
+}
+
+.btn-add-student:hover, .btn-manage-students:hover {
+  background-color: var(--primary-dark);
+  text-decoration: none;
+}
+
+/* Course Page Styles */
+.course-title {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.module-description {
+  text-align: left;
+  padding: 1.5rem;
+  background-color: var(--white);
+  border-radius: var(--border-radius);
+  margin-top: 1rem;
+  line-height: 1.6;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
+  font-size: 1.2rem;
+  color: var(--gray);
+}
+
+/* Lesson Page Improvements */
+.lesson-content {
+  padding: 2rem;
+  background-color: var(--white);
+  border-radius: var(--border-radius);
+  margin: 1rem 0;
+  text-align: left;
+  line-height: 1.6;
+  box-shadow: var(--box-shadow);
+}
+
+.lesson-content h2 {
+  color: var(--primary-color);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.8rem;
+}
+
+.lesson-content h3 {
+  color: var(--primary-dark);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.4rem;
+}
+
+.lesson-content ul, .lesson-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.lesson-content li {
+  margin-bottom: 0.5rem;
+}
+
+.lesson-content p {
+  margin-bottom: 1rem;
+}
+
+/* Header Branding */
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-logo {
+  height: 40px;
+  width: auto;
 }
