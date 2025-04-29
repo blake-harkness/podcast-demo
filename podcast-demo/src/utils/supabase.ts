@@ -57,4 +57,14 @@ export type StudentProgress = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type StudentSubmission = {
+  id: string;
+  student_id: string;
+  module_id: string;
+  question_text: string;
+  answer_text: string;
+  submitted_at: string;
+  updated_at: string;
 }; 

@@ -3,8 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, Profile } from '../utils/supabase';
 import { Link } from 'react-router-dom';
 
+type ResetResult = {
+  success: boolean;
+  message: string;
+};
+
 export function Students() {
-  const { profile } = useAuth();
+  const { profile, resetPassword } = useAuth();
   const [students, setStudents] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,6 +17,8 @@ export function Students() {
   const [addingStudent, setAddingStudent] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState<{[key: string]: boolean}>({});
+  const [resetResults, setResetResults] = useState<{[key: string]: ResetResult}>({});
 
   useEffect(() => {
     console.log("Students component mounted, profile:", profile?.id);
@@ -172,12 +179,12 @@ export function Students() {
   }
 
   async function handleRemoveStudent(studentId: string) {
-    if (!confirm('Are you sure you want to remove this student?')) {
+    if (!confirm('Are you sure you want to completely remove this student? This will permanently delete their account and all their data.')) {
       return;
     }
 
     try {
-      console.log(`Removing student with ID: ${studentId}`);
+      console.log(`Completely removing student with ID: ${studentId}`);
       setError(null);
 
       if (!profile?.id) {
@@ -186,22 +193,134 @@ export function Students() {
         return;
       }
 
-      const { error } = await supabase
-        .from('student_teacher')
+      // Step 1: Delete student submissions
+      console.log("Deleting student submissions...");
+      const { error: submissionsError } = await supabase
+        .from('student_submissions')
         .delete()
-        .eq('teacher_id', profile.id)
         .eq('student_id', studentId);
 
-      if (error) {
-        console.error("Error removing student:", error);
-        throw error;
+      if (submissionsError) {
+        console.error("Error deleting student submissions:", submissionsError);
+        throw submissionsError;
       }
 
-      console.log("Student successfully removed");
+      // Step 2: Delete student progress
+      console.log("Deleting student progress...");
+      const { error: progressError } = await supabase
+        .from('student_progress')
+        .delete()
+        .eq('student_id', studentId);
+
+      if (progressError) {
+        console.error("Error deleting student progress:", progressError);
+        throw progressError;
+      }
+
+      // Step 3: Delete student-teacher relationships
+      console.log("Deleting student-teacher relationships...");
+      const { error: relationshipError } = await supabase
+        .from('student_teacher')
+        .delete()
+        .eq('student_id', studentId);
+
+      if (relationshipError) {
+        console.error("Error deleting student-teacher relationships:", relationshipError);
+        throw relationshipError;
+      }
+
+      // Step 4: Delete student profile
+      console.log("Deleting student profile...");
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', studentId);
+
+      if (profileError) {
+        console.error("Error deleting student profile:", profileError);
+        throw profileError;
+      }
+      
+      // Step 5: Delete the user using admin function
+      console.log("Deleting auth user...");
+      const { error: deleteUserError } = await supabase.rpc('admin_delete_user', {
+        target_user_id: studentId
+      });
+      
+      if (deleteUserError) {
+        console.error("Error deleting auth user:", deleteUserError);
+        throw deleteUserError;
+      }
+
+      console.log("Student successfully removed from the system");
       setStudents(students.filter((s) => s.id !== studentId));
     } catch (error) {
       console.error('Error removing student:', error);
-      setError('Failed to remove student. Please try again.');
+      setError('Failed to completely remove student. Please contact an administrator.');
+    }
+  }
+
+  async function handleResetPassword(studentId: string, email: string) {
+    try {
+      // Mark this student as being processed
+      setResetLoading(prev => ({ ...prev, [studentId]: true }));
+      
+      // Clear any previous results for this student
+      setResetResults(prev => {
+        const newResults = { ...prev };
+        delete newResults[studentId];
+        return newResults;
+      });
+      
+      console.log(`Sending password reset email to student: ${email}`);
+      
+      const { error } = await resetPassword(email);
+      
+      if (error) {
+        console.error("Error sending password reset:", error);
+        setResetResults(prev => ({ 
+          ...prev, 
+          [studentId]: { 
+            success: false, 
+            message: error.message || 'Failed to send password reset email'
+          }
+        }));
+        return;
+      }
+      
+      console.log("Password reset email sent successfully");
+      setResetResults(prev => ({ 
+        ...prev, 
+        [studentId]: { 
+          success: true, 
+          message: 'Password reset email sent successfully'
+        }
+      }));
+      
+      // Clear the result after 5 seconds
+      setTimeout(() => {
+        setResetResults(prev => {
+          const newResults = { ...prev };
+          delete newResults[studentId];
+          return newResults;
+        });
+      }, 5000);
+      
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      setResetResults(prev => ({ 
+        ...prev, 
+        [studentId]: { 
+          success: false, 
+          message: 'An unexpected error occurred'
+        }
+      }));
+    } finally {
+      setResetLoading(prev => {
+        const newLoading = { ...prev };
+        delete newLoading[studentId];
+        return newLoading;
+      });
     }
   }
 
@@ -252,42 +371,56 @@ export function Students() {
         </form>
       </div>
 
-      <div className="students-list">
+      {error && <div className="error-message">{error}</div>}
+
+      <div className="student-table">
         <h3>Your Students</h3>
-        {error && <div className="error-message">{error}</div>}
-        
         {students.length === 0 ? (
           <div className="empty-state">
-            <p>You don't have any students yet. Create or add students using the options above.</p>
+            <p>You don't have any students yet.</p>
           </div>
         ) : (
-          <div className="student-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((student) => (
-                  <tr key={student.id}>
-                    <td>{student.full_name}</td>
-                    <td>{student.email}</td>
-                    <td>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((student) => (
+                <tr key={student.id}>
+                  <td>{student.full_name}</td>
+                  <td>{student.email}</td>
+                  <td>
+                    <div className="student-actions">
+                      <button
+                        className="btn-password-reset"
+                        onClick={() => handleResetPassword(student.id, student.email)}
+                        disabled={resetLoading[student.id]}
+                        title="Send password reset email"
+                      >
+                        {resetLoading[student.id] ? 'Sending...' : 'Reset Password'}
+                      </button>
                       <button
                         className="btn-danger"
                         onClick={() => handleRemoveStudent(student.id)}
+                        title="Permanently delete this student and all their data"
                       >
-                        Remove
+                        🗑️<span className="btn-danger-text">Delete Student</span>
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      {resetResults[student.id] && (
+                        <span className={`reset-result ${resetResults[student.id].success ? 'success' : 'error'}`}>
+                          {resetResults[student.id].message}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

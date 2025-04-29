@@ -9,7 +9,7 @@ type ProtectedRouteProps = {
 };
 
 export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
-  const { user, profile, loading, getProfile } = useAuth();
+  const { user, profile, loading, getProfile, refreshAuth } = useAuth();
   const [waitTime, setWaitTime] = useState(0);
   const [retryingProfile, setRetryingProfile] = useState(false);
   const [hasRefreshed, setHasRefreshed] = useState(false);
@@ -24,17 +24,24 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
       waitTime
     });
 
-    // If stuck loading for more than 8 seconds and haven't refreshed yet, try a refresh
-    if (loading && waitTime > 8 && !hasRefreshed) {
-      console.log("Authentication taking too long, refreshing page...");
+    // If stuck loading for more than 6 seconds and haven't refreshed yet, try refreshAuth
+    if (loading && waitTime > 6 && !hasRefreshed) {
+      console.log("Authentication taking too long, refreshing auth state...");
       setHasRefreshed(true);
+      refreshAuth();
+      return;
+    }
+    
+    // If loading persists for more than 10 seconds, force page reload
+    if (loading && waitTime > 10 && hasRefreshed) {
+      console.log("Auth refresh didn't resolve, reloading page...");
       window.location.reload();
       return;
     }
     
     // If we have a user but no profile, give it some time and then try to force fetch the profile
     let timer: number | undefined;
-    if ((loading || (user && !profile)) && waitTime < 10) {
+    if ((loading || (user && !profile)) && waitTime < 15) {
       console.log(`Waiting for auth/profile to load (${waitTime}s)...`);
       timer = window.setTimeout(() => {
         setWaitTime(prev => prev + 1);
@@ -49,7 +56,7 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
     return () => {
       if (timer) window.clearTimeout(timer);
     };
-  }, [loading, user, profile, allowedRole, waitTime, retryingProfile, hasRefreshed]);
+  }, [loading, user, profile, allowedRole, waitTime, retryingProfile, hasRefreshed, refreshAuth]);
   
   // Function to try fetching the profile manually
   const attemptProfileRetrieval = async () => {
@@ -77,8 +84,8 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
         .single();
         
       if (directProfile && !directError) {
-        console.log("Profile retrieved via direct query, reloading page");
-        window.location.reload();
+        console.log("Profile retrieved via direct query, refreshing auth");
+        await refreshAuth();
         return;
       }
       
@@ -112,14 +119,8 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
       // Small delay to allow the profile to be created
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Now try to get the profile using getSession to avoid RLS issues
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        console.log("Successfully got session, reloading page to refresh profile");
-        window.location.reload();
-      } else {
-        console.log("No session available");
-      }
+      // Refresh auth state after profile creation
+      await refreshAuth();
     } catch (error) {
       console.error("Error in manual profile retrieval:", error);
     } finally {
@@ -134,12 +135,12 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
       <div className="loading-container">
         <p>Loading...</p>
         <p className="loading-details">Please wait while we authenticate you...</p>
-        {waitTime > 5 && (
+        {waitTime > 4 && (
           <button 
-            onClick={() => window.location.reload()} 
+            onClick={() => refreshAuth()} 
             className="btn-primary mt-4"
           >
-            Refresh Page
+            Refresh Authentication
           </button>
         )}
       </div>
@@ -163,17 +164,27 @@ export function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
     return (
       <div className="loading-container">
         <p>{message}</p>
-        <p className="loading-details">
-          {waitTime >= 2 && !retryingProfile && (
+        <div className="loading-details">
+          {waitTime >= 2 && (
             <button 
               onClick={attemptProfileRetrieval} 
               className="btn-primary"
-              style={{ marginTop: '16px' }}
+              disabled={retryingProfile}
+              style={{ marginTop: '16px', marginRight: '8px' }}
             >
-              Retry Loading Profile
+              {retryingProfile ? 'Loading Profile...' : 'Retry Loading Profile'}
             </button>
           )}
-        </p>
+          {waitTime >= 4 && (
+            <button 
+              onClick={() => window.location.reload()} 
+              className="btn-secondary"
+              style={{ marginTop: '16px' }}
+            >
+              Reload Page
+            </button>
+          )}
+        </div>
       </div>
     );
   }

@@ -13,6 +13,8 @@ type AuthContextType = {
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
   createStudent: (email: string, password: string, fullName: string) => Promise<{ error: any, user?: User | null }>;
   getProfile: (userId: string) => Promise<{ data?: Profile | null, error?: any }>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
+  refreshAuth: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,28 +25,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [lastFetch, setLastFetch] = useState<number>(0);
+
+  // Function to refresh auth state
+  const refreshAuth = async () => {
+    try {
+      setLoading(true);
+      
+      // Clear previous state
+      setAuthError(null);
+      
+      // Get current session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error("Error refreshing session:", sessionError);
+        setAuthError(sessionError.message);
+        return;
+      }
+      
+      // Update session and user state
+      setSession(sessionData.session);
+      setUser(sessionData.session?.user ?? null);
+      
+      // Get profile if we have a user
+      if (sessionData.session?.user) {
+        await getProfile(sessionData.session.user.id);
+      } else {
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error("Error in refreshAuth:", error);
+    } finally {
+      setLoading(false);
+      setLastFetch(Date.now());
+    }
+  };
 
   useEffect(() => {
-    // Check active sessions and sets the user
+    let mounted = true;
     let sessionTimeout: NodeJS.Timeout;
+    let refreshTimeout: NodeJS.Timeout;
     
     const getSession = async () => {
       try {
+        if (!mounted) return;
+        
         setLoading(true);
         console.log("Getting session...");
         
-        // Set a longer timeout for session retrieval
+        // Set a timeout for session retrieval
         sessionTimeout = setTimeout(() => {
+          if (!mounted) return;
+          
           console.error("Session retrieval timed out");
           setLoading(false);
           setAuthError("Authentication timed out. Please try refreshing the page.");
-        }, 10000);
+        }, 8000);
         
         // Get the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         // Clear the timeout since we got a response
         clearTimeout(sessionTimeout);
+        
+        if (!mounted) return;
         
         if (sessionError) {
           console.error("Session error:", sessionError);
@@ -58,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Update state with session data
         setSession(session);
         setUser(session?.user ?? null);
+        setLastFetch(Date.now());
         
         if (session?.user) {
           console.log("User authenticated, getting profile...");
@@ -67,11 +113,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
         }
       } catch (error) {
+        if (!mounted) return;
+        
         console.error("Error in getSession:", error);
         setAuthError("An error occurred during authentication");
       } finally {
-        clearTimeout(sessionTimeout);
-        setLoading(false);
+        if (mounted) {
+          clearTimeout(sessionTimeout);
+          setLoading(false);
+        }
       }
     };
 
@@ -80,11 +130,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
+        
         console.log("Auth state changed:", event);
         
         // Update the session and user state
         setSession(session);
         setUser(session?.user ?? null);
+        setLastFetch(Date.now());
         
         if (session?.user) {
           console.log("User authenticated after state change, getting profile...");
@@ -98,8 +151,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    // Set up a periodic refresh to prevent stale auth state
+    refreshTimeout = setInterval(() => {
+      // Only refresh if it's been more than 5 minutes since last fetch
+      // and we're not already loading
+      if (mounted && !loading && Date.now() - lastFetch > 5 * 60 * 1000) {
+        console.log("Auto-refreshing auth state...");
+        refreshAuth();
+      }
+    }, 60 * 1000); // Check every minute
+
     return () => {
+      mounted = false;
       clearTimeout(sessionTimeout);
+      clearInterval(refreshTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -125,6 +190,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Unexpected error in getProfile:", error);
       setProfile(null);
+      return { error };
+    }
+  };
+
+  // Send password reset email
+  const resetPassword = async (email: string) => {
+    try {
+      console.log("Sending password reset email to:", email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) {
+        console.error("Password reset error:", error);
+        return { error };
+      }
+      
+      console.log("Password reset email sent successfully");
+      return { error: null };
+    } catch (error) {
+      console.error("Unexpected error in resetPassword:", error);
       return { error };
     }
   };
@@ -415,6 +501,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateProfile,
     createStudent,
     getProfile,
+    resetPassword,
+    refreshAuth
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
