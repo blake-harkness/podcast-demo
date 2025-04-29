@@ -91,60 +91,6 @@ export function StudentCourse() {
     }
   }
 
-  async function handleToggleComplete(moduleId: string, isCompleted: boolean) {
-    try {
-      setError(null);
-      
-      const module = modules.find((m) => m.id === moduleId);
-      
-      if (!module) return;
-
-      if (module.progress_id) {
-        // Update existing progress
-        const { error } = await supabase
-          .from('student_progress')
-          .update({
-            completed: isCompleted,
-            completed_at: isCompleted ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', module.progress_id);
-
-        if (error) throw error;
-      } else {
-        // Create new progress entry
-        const { error } = await supabase
-          .from('student_progress')
-          .insert([
-            {
-              student_id: profile?.id,
-              module_id: moduleId,
-              completed: isCompleted,
-              completed_at: isCompleted ? new Date().toISOString() : null,
-            },
-          ]);
-
-        if (error) throw error;
-      }
-
-      // Update local state
-      setModules(
-        modules.map((m) =>
-          m.id === moduleId
-            ? {
-                ...m,
-                completed: isCompleted,
-                completed_at: isCompleted ? new Date().toISOString() : null,
-              }
-            : m
-        )
-      );
-    } catch (error) {
-      console.error('Error updating module completion:', error);
-      setError('Failed to update module progress. Please try again.');
-    }
-  }
-
   function handleGoToLesson(weekNumber: number) {
     navigate(`/course/lesson${weekNumber}`);
   }

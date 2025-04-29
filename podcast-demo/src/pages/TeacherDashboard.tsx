@@ -257,7 +257,7 @@ export function TeacherDashboard() {
               </div>
             ) : (
               <div className="submissions-list">
-                {studentSubmissions.map((item, index) => (
+                {studentSubmissions.map((item, ) => (
                   <div key={item.submission.id} className="submission-card">
                     <div className="submission-header">
                       <h3>Week {item.week_number}: {item.module_title}</h3>

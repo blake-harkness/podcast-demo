@@ -1,10 +1,10 @@
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
-const StudentDashboard = () => {
-  const { user, signOut } = useAuth();
+export function StudentDashboard() {
+  const { signOut } = useAuth();
   const navigate = useNavigate();
-  
+
   const handleSignOut = async () => {
     const success = await signOut();
     if (success) {
@@ -13,13 +13,14 @@ const StudentDashboard = () => {
   };
 
   return (
-    <button 
-      className="btn-link" 
-      onClick={handleSignOut}
-    >
-      Sign Out
-    </button>
+    <div className="dashboard-container">
+      <h2>Student Dashboard</h2>
+      <p>Welcome to your dashboard</p>
+      
+      <div className="button-group mt-4">
+        <Link to="/course" className="btn-primary">Go to Course</Link>
+        <button onClick={handleSignOut} className="btn-secondary mt-2">Sign Out</button>
+      </div>
+    </div>
   );
-};
-
-export default StudentDashboard; 
+} 

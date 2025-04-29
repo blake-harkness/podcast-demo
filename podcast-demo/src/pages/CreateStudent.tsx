@@ -59,19 +59,11 @@ export function CreateStudent() {
     setLoading(true);
     
     try {
-      const { error, user } = await createStudent(email, password, fullName);
+      // Create student account through auth context
+      const { error } = await createStudent(email, password, fullName);
       
       if (error) {
-        let errorMessage = error.message;
-        if (error.message.includes('auth/invalid-email')) {
-          errorMessage = 'Invalid email address format';
-        } else if (error.message.includes('already in use')) {
-          errorMessage = 'This email is already registered. Please use another email or add the existing student.';
-        } else if (error.message.includes('Database error saving new user')) {
-          errorMessage = 'Error creating student profile. Please try again.';
-        }
-        
-        setError(errorMessage);
+        setError(error.message || 'Failed to create student account');
         return;
       }
       

@@ -24,7 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
 
   // Function to refresh auth state
@@ -32,15 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // Clear previous state
-      setAuthError(null);
-      
       // Get current session
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
         console.error("Error refreshing session:", sessionError);
-        setAuthError(sessionError.message);
         return;
       }
       
@@ -80,7 +75,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           console.error("Session retrieval timed out");
           setLoading(false);
-          setAuthError("Authentication timed out. Please try refreshing the page.");
         }, 8000);
         
         // Get the current session
@@ -93,7 +87,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (sessionError) {
           console.error("Session error:", sessionError);
-          setAuthError(sessionError.message);
           setLoading(false);
           return;
         }
@@ -116,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mounted) return;
         
         console.error("Error in getSession:", error);
-        setAuthError("An error occurred during authentication");
       } finally {
         if (mounted) {
           clearTimeout(sessionTimeout);
