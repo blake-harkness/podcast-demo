@@ -100,7 +100,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (session?.user) {
           console.log("User authenticated, getting profile...");
-          await getProfile(session.user.id);
+          
+          // Add a retry mechanism for profile retrieval
+          let retries = 0;
+          let profileResult: { data?: Profile | null; error?: any } | null = null;
+          
+          while (retries < 3 && mounted) {
+            if (retries > 0) {
+              console.log(`Retry ${retries}/3 getting profile...`);
+              await new Promise(r => setTimeout(r, 1000)); // Wait before retry
+            }
+            
+            profileResult = await getProfile(session.user.id);
+            retries++;
+            
+            // If we got data or a non-retriable error, break
+            if (profileResult?.data || (profileResult?.error && profileResult.error.code !== 'PGRST116')) {
+              break;
+            }
+          }
+          
+          // If we still don't have a profile after retries, try to create one
+          if (mounted && (!profileResult || !profileResult.data)) {
+            console.log("Profile not found after retries, attempting to create");
+            await createMissingProfile(session.user.id);
+          }
         } else {
           console.log("No authenticated user found");
           setProfile(null);
@@ -126,6 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log("Auth state changed:", event);
         
+        // Set loading true during this process
+        setLoading(true);
+        
         // Update the session and user state
         setSession(session);
         setUser(session?.user ?? null);
@@ -133,13 +160,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (session?.user) {
           console.log("User authenticated after state change, getting profile...");
-          await getProfile(session.user.id);
+          
+          // Add timeout for profile retrieval
+          const profileTimeout = setTimeout(() => {
+            if (mounted) {
+              console.log("Profile retrieval timed out during auth state change");
+              setLoading(false);
+            }
+          }, 5000);
+          
+          // Get profile with retries
+          let retries = 0;
+          let profileResult: { data?: Profile | null; error?: any } | null = null;
+          
+          while (retries < 2 && mounted) {
+            profileResult = await getProfile(session.user.id);
+            retries++;
+            
+            if (profileResult?.data) {
+              break;
+            }
+            
+            if (retries < 2) {
+              console.log(`Auth state change: retry ${retries}/2 getting profile...`);
+              await new Promise(r => setTimeout(r, 800));
+            }
+          }
+          
+          clearTimeout(profileTimeout);
         } else {
           console.log("No authenticated user after state change");
           setProfile(null);
         }
         
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     );
 
@@ -164,24 +220,128 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getProfile = async (userId: string) => {
     try {
       console.log("Fetching profile for user:", userId);
-      const { data, error } = await supabase
+      
+      // First check if we have a valid user ID
+      if (!userId) {
+        console.error('Invalid user ID provided to getProfile');
+        return { error: 'Invalid user ID' };
+      }
+      
+      // Add a timeout to the fetch operation
+      const timeoutPromise = new Promise<{ error: string }>((_, reject) => 
+        setTimeout(() => reject({ error: 'Profile fetch timeout' }), 5000)
+      );
+      
+      const fetchPromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
+      
+      // Race between fetch and timeout
+      const { data, error } = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]) as any;
 
       if (error) {
         console.error('Error fetching profile:', error);
+        
+        // Clear profile if we got an error
         setProfile(null);
+        
+        // Try to create profile if not found
+        if (error.code === 'PGRST116') {  // Record not found
+          console.log('Profile not found, attempting to create');
+          return await createMissingProfile(userId);
+        }
+        
         return { error };
       }
 
       console.log("Profile retrieved:", data);
-      setProfile(data as Profile);
-      return { data };
+      
+      if (data) {
+        setProfile(data as Profile);
+        setLastFetch(Date.now());
+        return { data };
+      } else {
+        console.log("No profile data returned");
+        setProfile(null);
+        return { error: 'No profile data' };
+      }
     } catch (error) {
       console.error("Unexpected error in getProfile:", error);
       setProfile(null);
+      return { error };
+    }
+  };
+  
+  // Helper function to create a missing profile
+  const createMissingProfile = async (userId: string) => {
+    try {
+      console.log("Creating missing profile for user:", userId);
+      
+      // Get user data
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      
+      if (!user) {
+        console.error("No user data available for profile creation");
+        return { error: 'No user data' };
+      }
+      
+      // Try direct upsert first
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          role: 'student', // Default role
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+          email: user.email || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating profile:", error);
+        
+        // Try RPC fallback
+        const { error: rpcError } = await supabase.rpc('ensure_profile_exists', {
+          user_id: userId,
+          user_role: user.user_metadata?.role || 'student',
+          user_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+          user_email: user.email || ''
+        });
+        
+        if (rpcError) {
+          console.error("RPC fallback failed:", rpcError);
+          return { error: rpcError };
+        }
+        
+        // Fetch the profile after RPC call
+        const { data: profileData, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+          
+        if (fetchError) {
+          console.error("Failed to fetch profile after RPC:", fetchError);
+          return { error: fetchError };
+        }
+        
+        setProfile(profileData as Profile);
+        return { data: profileData };
+      }
+      
+      console.log("Profile created successfully:", data);
+      setProfile(data as Profile);
+      return { data };
+    } catch (error) {
+      console.error("Unexpected error in createMissingProfile:", error);
       return { error };
     }
   };
